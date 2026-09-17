@@ -17,14 +17,21 @@ import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form'
 import { ArrowRightAltRounded } from '@mui/icons-material'
+import { useUserApi, type User } from '#/hooks/useUserApi'
 
 export interface CreateUserInputs {
+    id?: number
     userName: string
     name: string
-    userId: string
     contact: string
-    password: string
-    role: 'USER' | 'ADMIN' | 'ADVOCATE'
+    password?: string
+    role: 'USER' | 'ADMIN' | 'OFFICE'
+}
+
+export interface UserModalProps {
+    open?: boolean
+    onClose?: () => void
+    userToEdit?: User | null
 }
 
 const modalStyle = {
@@ -41,9 +48,15 @@ const modalStyle = {
     p: 3,
 }
 
-export default function UserModal() {
-    const [open, setOpen] = React.useState(false)
+export default function UserModal({ open: externalOpen, onClose, userToEdit }: UserModalProps = {}) {
+    const [internalOpen, setInternalOpen] = React.useState(false)
     const [showPassword, setShowPassword] = React.useState(false)
+
+    const isControlled = externalOpen !== undefined
+    const open = isControlled ? externalOpen : internalOpen
+    const isEditMode = Boolean(userToEdit)
+
+    const { createUser, updateUser } = useUserApi()
 
     const {
         register,
@@ -55,37 +68,80 @@ export default function UserModal() {
         defaultValues: {
             userName: '',
             name: '',
-            userId: '',
             contact: '',
             password: '',
             role: 'USER',
         },
     })
 
-    const handleOpen = () => setOpen(true)
+    React.useEffect(() => {
+        if (open) {
+            if (userToEdit) {
+                reset({
+                    userName: userToEdit.userName || '',
+                    name: userToEdit.name || '',
+                    contact: userToEdit.contact || '',
+                    password: '',
+                    role: userToEdit.role || 'USER',
+                })
+            } else {
+                reset({
+                    userName: '',
+                    name: '',
+                    contact: '',
+                    password: '',
+                    role: 'USER',
+                })
+            }
+        }
+    }, [open, userToEdit, reset])
+
+    const handleOpen = () => setInternalOpen(true)
     const handleClose = () => {
-        setOpen(false)
+        if (isControlled && onClose) {
+            onClose()
+        } else {
+            setInternalOpen(false)
+        }
         setShowPassword(false)
         reset()
     }
 
-    const onSubmit: SubmitHandler<CreateUserInputs> = (data) => {
-        console.log('New User Created:', data)
-        // Handle API submission logic here
-        handleClose()
+    const onSubmit: SubmitHandler<CreateUserInputs> = async (data) => {
+        try {
+            if (isEditMode && userToEdit?.id) {
+                const updatePayload: Partial<User> = {
+                    name: data.name,
+                    contact: data.contact,
+                    role: data.role,
+                }
+                await updateUser({ id: userToEdit.id, data: updatePayload })
+            } else {
+                await createUser(data)
+            }
+            handleClose()
+        } catch (error: any) {
+            if (error.response?.data?.message) {
+                console.error('❌ Backend Validation Errors:', error.response.data.message)
+            } else {
+                console.error(isEditMode ? 'Error updating user:' : 'Error creating user:', error)
+            }
+        }
     }
 
     return (
         <div>
-            <Button
-                onClick={handleOpen}
-                variant="contained"
-                color="success"
-                startIcon={<AddCircleIcon />}
-                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
-            >
-                ইউজার তৈরি করুন
-            </Button>
+            {!isControlled && (
+                <Button
+                    onClick={handleOpen}
+                    variant="contained"
+                    color="success"
+                    startIcon={<AddCircleIcon />}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+                >
+                    ইউজার তৈরি করুন
+                </Button>
+            )}
 
             <Modal
                 open={open}
@@ -100,7 +156,7 @@ export default function UserModal() {
                             variant="h6"
                             sx={{ fontWeight: 'medium', color: '#363636ff' }}
                         >
-                            নতুন ইউজার তৈরি করুন
+                            {isEditMode ? 'ইউজার সম্পাদনা করুন' : 'নতুন ইউজার তৈরি করুন'}
                         </Typography>
                         <IconButton onClick={handleClose} size="small" aria-label="close">
                             <CloseIcon
@@ -116,17 +172,18 @@ export default function UserModal() {
                     <form onSubmit={handleSubmit(onSubmit)}>
                         <Stack spacing={2.5}>
                             {/* User Name */}
-                            <TextField
+                            {!isEditMode && <TextField
                                 fullWidth
                                 label="ইউজারনেম"
                                 placeholder="ইউজারনেম লিখুন"
                                 size="medium"
+                                disabled={isEditMode}
                                 {...register('userName', {
                                     required: 'ইউজারনেম দেয়া আবশ্যক',
                                 })}
                                 error={!!errors.userName}
                                 helperText={errors.userName?.message}
-                            />
+                            />}
 
                             {/* Full Name */}
                             <TextField
@@ -139,19 +196,6 @@ export default function UserModal() {
                                 })}
                                 error={!!errors.name}
                                 helperText={errors.name?.message}
-                            />
-
-                            {/* User ID */}
-                            <TextField
-                                fullWidth
-                                label="ইউজার আইডি"
-                                placeholder="ইউজার আইডি লিখুন"
-                                size="medium"
-                                {...register('userId', {
-                                    required: 'ইউজার আইডি দেয়া আবশ্যক',
-                                })}
-                                error={!!errors.userId}
-                                helperText={errors.userId?.message}
                             />
 
                             {/* Contact */}
@@ -168,24 +212,33 @@ export default function UserModal() {
                             />
 
                             {/* Password */}
-                            <TextField
+                            {!isEditMode && <TextField
                                 fullWidth
                                 label="পাসওয়ার্ড"
                                 type={showPassword ? 'text' : 'password'}
-                                placeholder="পাসওয়ার্ড লিখুন"
+                                placeholder={
+                                    isEditMode
+                                        ? 'পাসওয়ার্ড পরিবর্তনযোগ্য নয়'
+                                        : 'পাসওয়ার্ড লিখুন'
+                                }
                                 size="medium"
+                                disabled={isEditMode}
                                 {...register('password', {
-                                    required: 'পাসওয়ার্ড দেয়া আবশ্যক',
-                                    minLength: {
-                                        value: 6,
-                                        message: 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে',
+                                    validate: (value) => {
+                                        if (!isEditMode && (!value || value.trim() === '')) {
+                                            return 'পাসওয়ার্ড দেয়া আবশ্যক'
+                                        }
+                                        if (!isEditMode && value && value.length < 6) {
+                                            return 'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে'
+                                        }
+                                        return true
                                     },
                                 })}
                                 error={!!errors.password}
-                                helperText={errors.password?.message}
+                                helperText={isEditMode ? 'পাসওয়ার্ড পরিবর্তনযোগ্য নয়' : errors.password?.message}
                                 slotProps={{
                                     input: {
-                                        endAdornment: (
+                                        endAdornment: !isEditMode ? (
                                             <InputAdornment position="end">
                                                 <IconButton
                                                     onClick={() => setShowPassword(!showPassword)}
@@ -195,10 +248,10 @@ export default function UserModal() {
                                                     {showPassword ? <VisibilityOff /> : <Visibility />}
                                                 </IconButton>
                                             </InputAdornment>
-                                        ),
+                                        ) : null,
                                     },
                                 }}
-                            />
+                            />}
 
                             {/* Role */}
                             <Controller
@@ -217,6 +270,7 @@ export default function UserModal() {
                                     >
                                         <MenuItem value="USER">USER</MenuItem>
                                         <MenuItem value="ADMIN">ADMIN</MenuItem>
+                                        <MenuItem value="OFFICE">OFFICE</MenuItem>
                                     </TextField>
                                 )}
                             />
@@ -238,7 +292,7 @@ export default function UserModal() {
                                     disabled={isSubmitting}
                                     sx={{ borderRadius: 2, textTransform: 'none', px: 3 }}
                                 >
-                                    ইউজার তৈরি করুন <ArrowRightAltRounded />
+                                    {isEditMode ? 'আপডেট করুন' : 'ইউজার তৈরি করুন'} <ArrowRightAltRounded />
                                 </Button>
                             </Box>
                         </Stack>
