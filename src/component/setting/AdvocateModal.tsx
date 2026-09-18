@@ -12,6 +12,7 @@ import {
   Grid,
   InputAdornment,
   Paper,
+  FormHelperText,
 } from '@mui/material'
 import AddCircleIcon from '@mui/icons-material/AddCircle'
 import CloseIcon from '@mui/icons-material/Close'
@@ -22,48 +23,15 @@ import PersonIcon from '@mui/icons-material/Person'
 import SchoolIcon from '@mui/icons-material/School'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
-import { ArrowRightAltRounded } from '@mui/icons-material'
+import { ArrowRightAltRounded, CheckCircle, NotInterested } from '@mui/icons-material'
 import {
   useForm,
   useFieldArray,
   Controller,
   type SubmitHandler,
 } from 'react-hook-form'
-
-export interface AdvocateEduInput {
-  examName: string
-  instituteName?: string
-  boardName: string
-  passingYear?: number
-  result: string
-}
-
-export interface CreateAdvocateInputs {
-  // Advocate Info
-  advocateId: number
-  name: string
-  contactNo: string
-  password: string
-  email?: string
-  profileImage?: File,
-  placeofBirth?: string
-
-  // Adv Profile
-  fatherName?: string
-  motherName?: string
-  spouseName?: string
-  dob?: string
-  gender?: string
-  presentAddress?: string
-  permanentAddress?: string
-  religion?: string
-  nationality?: string
-  nominiName?: string
-  nominiRelation?: string
-
-  // Dynamic Edu Info Array
-  advocateEduInfo: AdvocateEduInput[]
-}
+import { useAdvocateApi } from '#/hooks/useAdvocateApi'
+import type { CreateAdvocateInput } from './SattingTypes'
 
 const modalStyle = {
   position: 'absolute' as const,
@@ -82,6 +50,19 @@ const modalStyle = {
 export default function AdvocateModal() {
   const [open, setOpen] = React.useState(false)
   const [showPassword, setShowPassword] = React.useState(false)
+  const { checkAdvocateId } = useAdvocateApi()
+  const [response, setResponse] = React.useState<{ isAvailable: boolean; message: string } | undefined>(undefined);
+
+  const handelAdvocateIdCheck = async (advocateId: number) => {
+    const a: string = advocateId.toString()
+    if (a.length !== 4) {
+      setResponse(undefined)
+    }
+    if (a.length === 4) {
+      const res = await checkAdvocateId(Number(advocateId));
+      setResponse(res)
+    }
+  };
 
   const {
     register,
@@ -89,7 +70,7 @@ export default function AdvocateModal() {
     control,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<CreateAdvocateInputs>({
+  } = useForm<CreateAdvocateInput>({
     defaultValues: {
       advocateId: undefined,
       name: '',
@@ -98,34 +79,39 @@ export default function AdvocateModal() {
       email: '',
       profileImage: undefined,
       placeofBirth: '',
-      fatherName: '',
-      motherName: '',
-      spouseName: '',
-      dob: '',
-      gender: '',
-      presentAddress: '',
-      permanentAddress: '',
-      religion: '',
-      nationality: 'Bangladeshi',
-      nominiName: '',
-      nominiRelation: '',
-      advocateEduInfo: [
-        {
-          examName: '',
-          instituteName: '',
-          boardName: '',
-          passingYear: undefined,
-          result: '',
-        },
-      ],
+      advProfile: {
+        fatherName: '',
+        motherName: '',
+        spouseName: '',
+        dob: '',
+        gender: '',
+        presentAddress: '',
+        permanentAddress: '',
+        religion: '',
+        nationality: 'Bangladeshi',
+        nominiName: '',
+        nominiRelation: '',
+        advocateEduInfo: [
+          {
+            examName: '',
+            instituteName: '',
+            boardName: '',
+            passingYear: undefined,
+            result: '',
+          },
+        ],
+      }
+
     },
   })
 
   // Dynamic Array for Educational Information
   const { fields, append, remove } = useFieldArray({
     control,
-    name: 'advocateEduInfo',
+    name: 'advProfile.advocateEduInfo',
   })
+
+  const { createAdvocate, isCreating } = useAdvocateApi()
 
   const handleOpen = () => setOpen(true)
   const handleClose = () => {
@@ -134,10 +120,16 @@ export default function AdvocateModal() {
     reset()
   }
 
-  const onSubmit: SubmitHandler<CreateAdvocateInputs> = (data) => {
-    console.log('New Advocate Created:', data)
-    // Handle API submission logic here
-    handleClose()
+  const onSubmit: SubmitHandler<CreateAdvocateInput> = async (formData) => {
+    try {
+      await createAdvocate({
+        ...formData,
+        advocateId: Number(formData.advocateId),
+      })
+      handleClose()
+    } catch (err) {
+      console.error('Failed to create advocate:', err)
+    }
   }
 
   return (
@@ -192,21 +184,27 @@ export default function AdvocateModal() {
                   </Typography>
                 </Box>
                 <Grid container spacing={2} columns={12}>
-                  <Grid size={{ xs: 12, sm: 4 }}>
+                  <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
                     <TextField
                       fullWidth
                       label="এডভোকেট আইডি *"
-                      placeholder=""
                       type="number"
                       size="small"
                       {...register('advocateId', {
                         required: 'এডভোকেট আইডি আবশ্যক',
                         valueAsNumber: true,
+                        onChange: (e) => handelAdvocateIdCheck(Number(e.target.value)),
                       })}
-                      onInput={(e) => console.log((e.target as HTMLInputElement).value)}
                       error={!!errors.advocateId}
-                      helperText={errors.advocateId?.message}
                     />
+                    <Typography>
+                      {response === undefined ? "" : response?.isAvailable ? <span style={{ fontSize: 12, color: 'green' }} >
+                        <CheckCircle /> {response?.message}
+                      </span> : <span style={{ fontSize: 12, color: 'red' }} >
+                        <NotInterested /> {response?.message}
+                      </span>}
+                    </Typography>
+
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -304,13 +302,16 @@ export default function AdvocateModal() {
                       type='file'
                       size="small"
                       focused
-                      {...register('profileImage')}
+                      {...register('profileImage', { required: "প্রফাইল ছবি আবশ্যক" })}
                       slotProps={{
                         htmlInput: {
                           accept: 'image/*',
                         },
                       }}
                     />
+                    <FormHelperText error>
+                      {errors.profileImage?.message}
+                    </FormHelperText>
                   </Grid>
                 </Grid>
               </Box>
@@ -335,7 +336,7 @@ export default function AdvocateModal() {
                       label="পিতার নাম"
                       placeholder="পিতার নাম লিখুন"
                       size="small"
-                      {...register('fatherName')}
+                      {...register('advProfile.fatherName')}
                     />
                   </Grid>
 
@@ -345,7 +346,7 @@ export default function AdvocateModal() {
                       label="মাতার নাম"
                       placeholder="মাতার নাম লিখুন"
                       size="small"
-                      {...register('motherName')}
+                      {...register('advProfile.motherName')}
                     />
                   </Grid>
 
@@ -355,7 +356,7 @@ export default function AdvocateModal() {
                       label="স্বামী/স্ত্রীর নাম"
                       placeholder="স্বামী/স্ত্রীর নাম লিখুন"
                       size="small"
-                      {...register('spouseName')}
+                      {...register('advProfile.spouseName')}
                     />
                   </Grid>
 
@@ -366,17 +367,19 @@ export default function AdvocateModal() {
                       type="date"
                       size="small"
                       slotProps={{ inputLabel: { shrink: true } }}
-                      {...register('dob')}
+                      {...register('advProfile.dob')}
                     />
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <Controller
-                      name="gender"
+                      name="advProfile.gender"
                       control={control}
+                      defaultValue=""
                       render={({ field }) => (
                         <TextField
                           {...field}
+                          value={field.value ?? ''}
                           select
                           fullWidth
                           label="লিঙ্গ"
@@ -396,7 +399,7 @@ export default function AdvocateModal() {
                       label="ধর্ম"
                       placeholder="ইসলাম / হিন্দু ইত্যাদি"
                       size="small"
-                      {...register('religion')}
+                      {...register('advProfile.religion')}
                     />
                   </Grid>
 
@@ -406,7 +409,7 @@ export default function AdvocateModal() {
                       label="জাতীয়তা"
                       placeholder="বাংলাদেশী"
                       size="small"
-                      {...register('nationality')}
+                      {...register('advProfile.nationality')}
                     />
                   </Grid>
 
@@ -416,7 +419,7 @@ export default function AdvocateModal() {
                       label="নমিনীর নাম"
                       placeholder="নমিনীর নাম লিখুন"
                       size="small"
-                      {...register('nominiName')}
+                      {...register('advProfile.nominiName')}
                     />
                   </Grid>
 
@@ -426,7 +429,7 @@ export default function AdvocateModal() {
                       label="নমিনীর সাথে সম্পর্ক"
                       placeholder="উদাহরণ: ভাই / স্ত্রী / সন্তান"
                       size="small"
-                      {...register('nominiRelation')}
+                      {...register('advProfile.nominiRelation')}
                     />
                   </Grid>
 
@@ -438,7 +441,7 @@ export default function AdvocateModal() {
                       label="বর্তমান ঠিকানা"
                       placeholder="বর্তমান ঠিকানা লিখুন"
                       size="small"
-                      {...register('presentAddress')}
+                      {...register('advProfile.presentAddress')}
                     />
                   </Grid>
 
@@ -450,7 +453,7 @@ export default function AdvocateModal() {
                       label="স্থায়ী ঠিকানা"
                       placeholder="স্থায়ী ঠিকানা লিখুন"
                       size="small"
-                      {...register('permanentAddress')}
+                      {...register('advProfile.permanentAddress')}
                     />
                   </Grid>
                 </Grid>
@@ -504,7 +507,7 @@ export default function AdvocateModal() {
                         >
                           ডিগ্রি / পরীক্ষা #{index + 1}
                         </Typography>
-                        {fields.length > 1 && (
+                        {fields.length > 0 && (
                           <IconButton
                             onClick={() => remove(index)}
                             color="error"
@@ -524,14 +527,14 @@ export default function AdvocateModal() {
                             placeholder="LL.B / S.S.C"
                             size="small"
                             {...register(
-                              `advocateEduInfo.${index}.examName` as const,
+                              `advProfile.advocateEduInfo.${index}.examName` as const,
                               { required: 'পরীক্ষার নাম আবশ্যক' }
                             )}
                             error={
-                              !!errors.advocateEduInfo?.[index]?.examName
+                              !!errors.advProfile?.advocateEduInfo?.[index]?.examName
                             }
                             helperText={
-                              errors.advocateEduInfo?.[index]?.examName?.message
+                              errors.advProfile?.advocateEduInfo?.[index]?.examName?.message
                             }
                           />
                         </Grid>
@@ -543,14 +546,14 @@ export default function AdvocateModal() {
                             placeholder="ঢাকা বিশ্ববিদ্যালয়"
                             size="small"
                             {...register(
-                              `advocateEduInfo.${index}.boardName` as const,
+                              `advProfile.advocateEduInfo.${index}.boardName` as const,
                               { required: 'বোর্ড/বিশ্ববিদ্যালয় আবশ্যক' }
                             )}
                             error={
-                              !!errors.advocateEduInfo?.[index]?.boardName
+                              !!errors.advProfile?.advocateEduInfo?.[index]?.boardName
                             }
                             helperText={
-                              errors.advocateEduInfo?.[index]?.boardName?.message
+                              errors.advProfile?.advocateEduInfo?.[index]?.boardName?.message
                             }
                           />
                         </Grid>
@@ -562,7 +565,7 @@ export default function AdvocateModal() {
                             placeholder="স্কুল/কলেজ"
                             size="small"
                             {...register(
-                              `advocateEduInfo.${index}.instituteName` as const
+                              `advProfile.advocateEduInfo.${index}.instituteName` as const
                             )}
                           />
                         </Grid>
@@ -575,7 +578,7 @@ export default function AdvocateModal() {
                             type="number"
                             size="small"
                             {...register(
-                              `advocateEduInfo.${index}.passingYear` as const,
+                              `advProfile.advocateEduInfo.${index}.passingYear` as const,
                               { valueAsNumber: true }
                             )}
                           />
@@ -588,14 +591,14 @@ export default function AdvocateModal() {
                             placeholder="1st Class / 5.00"
                             size="small"
                             {...register(
-                              `advocateEduInfo.${index}.result` as const,
+                              `advProfile.advocateEduInfo.${index}.result` as const,
                               { required: 'ফলাফল আবশ্যক' }
                             )}
                             error={
-                              !!errors.advocateEduInfo?.[index]?.result
+                              !!errors.advProfile?.advocateEduInfo?.[index]?.result
                             }
                             helperText={
-                              errors.advocateEduInfo?.[index]?.result?.message
+                              errors.advProfile?.advocateEduInfo?.[index]?.result?.message
                             }
                           />
                         </Grid>
@@ -621,7 +624,7 @@ export default function AdvocateModal() {
                   type="submit"
                   variant="contained"
                   color="success"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCreating}
                   sx={{ borderRadius: 2, textTransform: 'none', px: 3 }}
                 >
                   এডভোকেট সংরক্ষণ করুন <ArrowRightAltRounded sx={{ ml: 0.5 }} />
@@ -631,6 +634,6 @@ export default function AdvocateModal() {
           </form>
         </Box>
       </Modal>
-    </div>
+    </div >
   )
 }
