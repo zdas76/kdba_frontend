@@ -4,9 +4,9 @@ import axios from 'axios';
 // 1. Create a single, static instance outside of React
 export const api = axios.create({
     baseURL: 'http://localhost:5000/api/v1',
-    headers: {
-        'Content-Type': 'application/json',
-    },
+    // headers: {
+    //     'Content-Type': 'application/json',
+    // },
 });
 
 // 2. Dynamically attach things like Auth Tokens right before requests go out

@@ -1,6 +1,7 @@
 import * as React from 'react'
 import UserModal from '#/component/setting/UserModal'
-import { useUserApi, type User } from '#/hooks/useUserApi'
+import { useUserApi } from '#/hooks/useUserApi'
+import type { User } from '#/hooks/useUserApi'
 import { Box, Divider, Typography } from '@mui/material'
 import { createFileRoute } from '@tanstack/react-router'
 import Table from '@mui/material/Table'
@@ -40,7 +41,13 @@ function CreateUser() {
 
   return (
     <div>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
         <Typography variant="h6"> User Management</Typography>
         <UserModal />
       </Box>
@@ -79,7 +86,12 @@ function CreateUser() {
                       onClick={() => handleEdit(user)}
                     />
                     <Delete
-                      sx={{ cursor: 'pointer', color: 'red', marginInlineStart: 1, fontSize: 25 }}
+                      sx={{
+                        cursor: 'pointer',
+                        color: 'red',
+                        marginInlineStart: 1,
+                        fontSize: 25,
+                      }}
                       onClick={() => handleDelete(user.id)}
                     />
                   </TableCell>

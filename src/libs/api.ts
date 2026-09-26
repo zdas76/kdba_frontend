@@ -25,3 +25,5 @@ api.interceptors.request.use(
 );
 
 export default api;
+
+export const imageLink = 'http://localhost:5000/'
